@@ -41,7 +41,7 @@ async def ask_openrouter(prompt):
         "Content-Type": "application/json"
     }
     payload = {
-        "model": "openrouter/qwen:chat",
+        "model": "qwen:chat",
         "messages": [
             {"role": "system", "content": "Ты персональный Telegram-ассистент. Отвечай по делу, кратко и понятно."},
             {"role": "user", "content": prompt}
@@ -49,8 +49,14 @@ async def ask_openrouter(prompt):
     }
     async with aiohttp.ClientSession() as session:
         async with session.post(url, json=payload, headers=headers) as response:
-            result = await response.json()
-            return result['choices'][0]['message']['content']
+            logging.info(f"📡 Status: {response.status}")
+            res = await response.text()
+            logging.info(f"📩 Response: {res}")
+            if response.status == 200:
+                result = await response.json()
+                return result['choices'][0]['message']['content']
+            else:
+                raise Exception("OpenRouter error")
 
 async def daily_check():
     while True:
@@ -78,14 +84,16 @@ async def handle_text_message(message: types.Message):
         with sqlite3.connect(DB_NAME) as conn:
             c = conn.cursor()
             remind_time = datetime.now() + timedelta(hours=1)
-            c.execute("INSERT INTO tasks (user_id, content, remind_time, is_daily) VALUES (?, ?, ?, ?)", (user_id, text, remind_time.isoformat(), 0))
+            c.execute("INSERT INTO tasks (user_id, content, remind_time, is_daily) VALUES (?, ?, ?, ?)",
+                      (user_id, text, remind_time.isoformat(), 0))
             conn.commit()
         await message.answer("🕒 Напоминание добавлено!")
 
     elif "каждый день" in text.lower():
         with sqlite3.connect(DB_NAME) as conn:
             c = conn.cursor()
-            c.execute("INSERT INTO tasks (user_id, content, remind_time, is_daily) VALUES (?, ?, ?, ?)", (user_id, text, None, 1))
+            c.execute("INSERT INTO tasks (user_id, content, remind_time, is_daily) VALUES (?, ?, ?, ?)",
+                      (user_id, text, None, 1))
             conn.commit()
         await message.answer("📆 Ежедневная задача сохранена!")
 

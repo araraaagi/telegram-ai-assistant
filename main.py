@@ -6,9 +6,7 @@ from aiogram import Bot, Dispatcher, types, executor
 from aiogram.types import InputFile
 from datetime import datetime, timedelta
 import asyncio
-import speech_recognition as sr
 import os
-from pydub import AudioSegment
 
 BOT_TOKEN = os.getenv("BOT_TOKEN")
 OPENAI_API_KEY = os.getenv("OPENAI_API_KEY")
@@ -24,14 +22,14 @@ logging.basicConfig(level=logging.INFO)
 def init_db():
     with sqlite3.connect(DB_NAME) as conn:
         c = conn.cursor()
-        c.execute('''CREATE TABLE IF NOT EXISTS tasks (
+        c.execute("""CREATE TABLE IF NOT EXISTS tasks (
                         id INTEGER PRIMARY KEY AUTOINCREMENT,
                         user_id INTEGER,
                         content TEXT,
                         remind_time TEXT,
                         is_daily INTEGER,
                         is_done INTEGER DEFAULT 0
-                    )''')
+                    )""")
         conn.commit()
 
 async def ask_gpt(prompt):
@@ -57,34 +55,16 @@ async def daily_check():
                     await bot.send_message(user_id, f"👋 Утро! Сегодня запланировано: {content}")
         await asyncio.sleep(300)
 
-@dp.message_handler(content_types=types.ContentType.VOICE)
-async def handle_voice(message: types.Message):
-    file_info = await bot.get_file(message.voice.file_id)
-    downloaded_file = await bot.download_file(file_info.file_path)
-
-    with open("audio.ogg", "wb") as f:
-        f.write(downloaded_file.read())
-
-    AudioSegment.from_ogg("audio.ogg").export("audio.wav", format="wav")
-    recognizer = sr.Recognizer()
-    with sr.AudioFile("audio.wav") as source:
-        audio_data = recognizer.record(source)
-        try:
-            text = recognizer.recognize_google(audio_data, language="ru-RU")
-            await handle_text_message(types.Message(
-                message_id=message.message_id,
-                from_user=message.from_user,
-                chat=message.chat,
-                date=message.date,
-                text=text
-            ))
-        except sr.UnknownValueError:
-            await message.reply("Не смог разобрать голосовое 😕")
+@dp.message_handler(commands=['start'])
+async def send_welcome(message: types.Message):
+    await message.reply("👋 Привет! Я твой ИИ-ассистент. Просто напиши:\n— напомни завтра в 10:00...\n— документ договор для клиента...\n— каждый день спрашивай: сделал ли я...")
 
 @dp.message_handler(content_types=types.ContentType.TEXT)
 async def handle_text_message(message: types.Message):
     user_id = message.from_user.id
     text = message.text.strip().lower()
+
+    logging.info(f"Received from {user_id}: {text}")
 
     if "напомни" in text:
         with sqlite3.connect(DB_NAME) as conn:

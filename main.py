@@ -36,10 +36,10 @@ async def ask_gpt(prompt):
     response = openai.ChatCompletion.create(
         model="gpt-4",
         messages=[
-            {"role": "system", "content": "Ты персональный ассистент. Пиши чётко, кратко, понятно."},
+            {"role": "system", "content": "Ты персональный ассистент. Отвечай по делу, кратко, понятно."},
             {"role": "user", "content": prompt}
         ],
-        max_tokens=500
+        max_tokens=600
     )
     return response.choices[0].message.content.strip()
 
@@ -57,13 +57,16 @@ async def daily_check():
 
 @dp.message_handler(commands=['start'])
 async def send_welcome(message: types.Message):
-    await message.reply("👋 Привет! Я твой ИИ-ассистент. Просто напиши:\n— напомни завтра в 10:00...\n— документ договор для клиента...\n— каждый день спрашивай: сделал ли я...")
+    await message.reply("👋 Привет! Я твой ИИ-ассистент. Просто пиши:
+— вопросы
+— задачи
+— мысли
+Я всё запомню и помогу!")
 
 @dp.message_handler(content_types=types.ContentType.TEXT)
 async def handle_text_message(message: types.Message):
     user_id = message.from_user.id
     text = message.text.strip().lower()
-
     logging.info(f"Received from {user_id}: {text}")
 
     if "напомни" in text:
@@ -90,7 +93,8 @@ async def handle_text_message(message: types.Message):
         await message.answer_document(InputFile("doc.txt"))
 
     else:
-        await message.answer("Принял! Записал в базу. Если это задача — не забуду 💾")
+        gpt_response = await ask_gpt(text)
+        await message.answer(gpt_response)
 
 if __name__ == "__main__":
     init_db()

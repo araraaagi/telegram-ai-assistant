@@ -33,8 +33,9 @@ def init_db():
         conn.commit()
 
 async def ask_gpt(prompt):
+    logging.info("🧠 Отправка запроса в GPT...")
     response = openai.ChatCompletion.create(
-        model="gpt-4",
+        model="gpt-3.5-turbo",
         messages=[
             {"role": "system", "content": "Ты персональный ассистент. Отвечай по делу, кратко, понятно."},
             {"role": "user", "content": prompt}
@@ -62,10 +63,10 @@ async def send_welcome(message: types.Message):
 @dp.message_handler(content_types=types.ContentType.TEXT)
 async def handle_text_message(message: types.Message):
     user_id = message.from_user.id
-    text = message.text.strip().lower()
+    text = message.text.strip()
     logging.info(f"Received from {user_id}: {text}")
 
-    if "напомни" in text:
+    if "напомни" in text.lower():
         with sqlite3.connect(DB_NAME) as conn:
             c = conn.cursor()
             remind_time = datetime.now() + timedelta(hours=1)
@@ -74,7 +75,7 @@ async def handle_text_message(message: types.Message):
             conn.commit()
         await message.answer("🕒 Напоминание добавлено!")
 
-    elif "каждый день" in text:
+    elif "каждый день" in text.lower():
         with sqlite3.connect(DB_NAME) as conn:
             c = conn.cursor()
             c.execute("INSERT INTO tasks (user_id, content, remind_time, is_daily) VALUES (?, ?, ?, ?)",
@@ -82,15 +83,19 @@ async def handle_text_message(message: types.Message):
             conn.commit()
         await message.answer("📆 Ежедневная задача сохранена!")
 
-    elif "документ" in text:
+    elif "документ" in text.lower():
         gpt_response = await ask_gpt(text)
         with open("doc.txt", "w", encoding="utf-8") as f:
             f.write(gpt_response)
         await message.answer_document(InputFile("doc.txt"))
 
     else:
-        gpt_response = await ask_gpt(text)
-        await message.answer(gpt_response)
+        try:
+            gpt_response = await ask_gpt(text)
+            await message.answer(gpt_response)
+        except Exception as e:
+            logging.error(f"GPT ERROR: {e}")
+            await message.answer("⚠️ Ошибка при обращении к GPT. Проверь API-ключ или модель.")
 
 if __name__ == "__main__":
     init_db()

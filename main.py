@@ -41,7 +41,7 @@ async def ask_openrouter(prompt):
         "Content-Type": "application/json"
     }
     payload = {
-        "model": "qwen:chat",
+          "model": "mistralai/mistral-7b-instruct",
         "messages": [
             {"role": "system", "content": "Ты персональный Telegram-ассистент. Отвечай по делу, кратко и понятно."},
             {"role": "user", "content": prompt}

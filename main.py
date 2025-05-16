@@ -57,11 +57,7 @@ async def daily_check():
 
 @dp.message_handler(commands=['start'])
 async def send_welcome(message: types.Message):
-    await message.reply("👋 Привет! Я твой ИИ-ассистент. Просто пиши:
-— вопросы
-— задачи
-— мысли
-Я всё запомню и помогу!")
+    await message.reply("👋 Привет! Я твой ИИ-ассистент. Просто пиши:\n— вопросы\n— задачи\n— мысли\nЯ всё запомню и помогу!")
 
 @dp.message_handler(content_types=types.ContentType.TEXT)
 async def handle_text_message(message: types.Message):

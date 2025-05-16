@@ -1,7 +1,7 @@
 
 import logging
 import sqlite3
-import openai
+import aiohttp
 from aiogram import Bot, Dispatcher, types, executor
 from aiogram.types import InputFile
 from datetime import datetime, timedelta
@@ -9,13 +9,12 @@ import asyncio
 import os
 
 BOT_TOKEN = os.getenv("BOT_TOKEN")
-OPENAI_API_KEY = os.getenv("OPENAI_API_KEY")
+OPENROUTER_API_KEY = os.getenv("OPENROUTER_API_KEY")
 DB_NAME = "assistant.db"
 DAILY_CHECK_HOUR = 9
 
 bot = Bot(token=BOT_TOKEN)
 dp = Dispatcher(bot)
-openai.api_key = OPENAI_API_KEY
 
 logging.basicConfig(level=logging.INFO)
 
@@ -32,17 +31,26 @@ def init_db():
                     )""")
         conn.commit()
 
-async def ask_gpt(prompt):
-    logging.info("🧠 Отправка запроса в GPT...")
-    response = openai.ChatCompletion.create(
-        model="gpt-3.5-turbo",
-        messages=[
-            {"role": "system", "content": "Ты персональный ассистент. Отвечай по делу, кратко, понятно."},
+async def ask_openrouter(prompt):
+    logging.info("🧠 Отправка запроса в OpenRouter...")
+    url = "https://openrouter.ai/api/v1/chat/completions"
+    headers = {
+        "Authorization": f"Bearer {OPENROUTER_API_KEY}",
+        "HTTP-Referer": "https://t.me/araragiai_bot",
+        "X-Title": "AI Telegram Assistant",
+        "Content-Type": "application/json"
+    }
+    payload = {
+        "model": "openrouter/qwen:chat",
+        "messages": [
+            {"role": "system", "content": "Ты персональный Telegram-ассистент. Отвечай по делу, кратко и понятно."},
             {"role": "user", "content": prompt}
-        ],
-        max_tokens=600
-    )
-    return response.choices[0].message.content.strip()
+        ]
+    }
+    async with aiohttp.ClientSession() as session:
+        async with session.post(url, json=payload, headers=headers) as response:
+            result = await response.json()
+            return result['choices'][0]['message']['content']
 
 async def daily_check():
     while True:
@@ -58,7 +66,7 @@ async def daily_check():
 
 @dp.message_handler(commands=['start'])
 async def send_welcome(message: types.Message):
-    await message.reply("👋 Привет! Я твой ИИ-ассистент. Просто пиши:\n— вопросы\n— задачи\n— мысли\nЯ всё запомню и помогу!")
+    await message.reply("👋 Привет! Я твой OpenRouter-ассистент. Просто пиши:\n— вопросы\n— задачи\n— мысли\nЯ всё запомню и помогу!")
 
 @dp.message_handler(content_types=types.ContentType.TEXT)
 async def handle_text_message(message: types.Message):
@@ -70,32 +78,30 @@ async def handle_text_message(message: types.Message):
         with sqlite3.connect(DB_NAME) as conn:
             c = conn.cursor()
             remind_time = datetime.now() + timedelta(hours=1)
-            c.execute("INSERT INTO tasks (user_id, content, remind_time, is_daily) VALUES (?, ?, ?, ?)",
-                      (user_id, text, remind_time.isoformat(), 0))
+            c.execute("INSERT INTO tasks (user_id, content, remind_time, is_daily) VALUES (?, ?, ?, ?)", (user_id, text, remind_time.isoformat(), 0))
             conn.commit()
         await message.answer("🕒 Напоминание добавлено!")
 
     elif "каждый день" in text.lower():
         with sqlite3.connect(DB_NAME) as conn:
             c = conn.cursor()
-            c.execute("INSERT INTO tasks (user_id, content, remind_time, is_daily) VALUES (?, ?, ?, ?)",
-                      (user_id, text, None, 1))
+            c.execute("INSERT INTO tasks (user_id, content, remind_time, is_daily) VALUES (?, ?, ?, ?)", (user_id, text, None, 1))
             conn.commit()
         await message.answer("📆 Ежедневная задача сохранена!")
 
     elif "документ" in text.lower():
-        gpt_response = await ask_gpt(text)
+        gpt_response = await ask_openrouter(text)
         with open("doc.txt", "w", encoding="utf-8") as f:
             f.write(gpt_response)
         await message.answer_document(InputFile("doc.txt"))
 
     else:
         try:
-            gpt_response = await ask_gpt(text)
+            gpt_response = await ask_openrouter(text)
             await message.answer(gpt_response)
         except Exception as e:
-            logging.error(f"GPT ERROR: {e}")
-            await message.answer("⚠️ Ошибка при обращении к GPT. Проверь API-ключ или модель.")
+            logging.error(f"OpenRouter ERROR: {e}")
+            await message.answer("⚠️ Ошибка при обращении к OpenRouter.")
 
 if __name__ == "__main__":
     init_db()
